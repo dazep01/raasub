@@ -90,23 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
    // === INISIALISASI ===
    updateApiKeyUI();
    if (isFirstTime) showModal('modal-tutorial');
-   
-   // Muat subtitle
    subtitles = loadProjectFromStorage();
-
-   // CEK APAKAH ADA DRAF SAAT REFRESH
-   if (subtitles.length > 0) {
-      // Jika ada data tapi videoFile kosong (habis refresh)
-      // Kita beri tahu user untuk upload ulang videonya saja
-      const dropZone = document.getElementById('drop-zone');
-      if (dropZone) {
-         dropZone.innerHTML += `
-            <div class="recover-alert" style="margin-top: 20px; padding: 15px; background: rgba(57, 255, 20, 0.1); border: 1px solid #39ff14; border-radius: 8px;">
-                <p style="color: #39ff14; font-size: 0.9rem;">✨ Draf subtitle ditemukan! Silakan upload ulang video yang sama untuk melanjutkan editing.</p>
-            </div>
-         `;
-      }
-   }
 
    // === NAVIGATION & MODALS ===
    function showScreen(id) {
@@ -163,54 +147,54 @@ document.addEventListener('DOMContentLoaded', () => {
       videoFile = file;
       els.videoPlayer.src = URL.createObjectURL(file);
 
-      // JALUR RECOVERY: Langsung buka editor, jangan baca Base64 (Hemat Memori & Waktu)
-      if (isRecovering) {
-         showScreen('screen-workspace');
-         els.btnExport.classList.remove('hidden');
-         // Pastikan elemen ini ada di HTML, jika tidak ada hapus baris bawah ini
-         const btnOpenModal = document.getElementById('btn-open-export-modal');
-         if(btnOpenModal) btnOpenModal.classList.remove('hidden');
-         
-         renderWorkspace();
-         return; // SELESAI di sini untuk recovery
-      }
-
-      // JALUR BARU: Baru baca Base64 untuk dikirim ke Gemini
       const reader = new FileReader();
       reader.onload = (e) => {
          videoDataUrl = e.target.result.split(',')[1];
-         showModal('modal-settings');
+         if (isRecovering) {
+            showScreen('screen-workspace');
+            els.btnExport.classList.remove('hidden');
+            document.getElementById('btn-open-export-modal').classList.remove('hidden');
+            renderWorkspace();
+         } else {
+            showModal('modal-settings');
+         }
       };
-      reader.onerror = () => alert("Gagal membaca file video.");
       reader.readAsDataURL(file);
    }
 
-els.videoInput.onchange = (e) => {
-   const file = e.target.files[0];
-   if (!file) return;
+   els.videoInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-   // 1. Cek Draf (Paling Prioritas)
-   if (subtitles && subtitles.length > 0) {
-      if (confirm("Draf ditemukan. Lanjutkan editing?")) {
-         proceedWithVideo(file, true);
-         els.videoInput.value = ""; // Reset input
+      if (!apiKey) {
+         alert("Masukkan Gemini API Key terlebih dahulu di pojok kanan atas!");
          return;
-      } else {
-         subtitles = [];
-         localStorage.removeItem('raasub_project_cache');
       }
-   }
 
-   // 2. Cek API Key (Hanya untuk proyek baru)
-   if (!apiKey) {
-      alert("Masukkan Gemini API Key terlebih dahulu!");
-      els.videoInput.value = ""; 
-      return;
-   }
+      const savedData = localStorage.getItem('raasub_project_cache');
 
-   proceedWithVideo(file, false);
-   els.videoInput.value = ""; 
-};
+      if (savedData) {
+         const confirmRecover = confirm("Kami menemukan draf subtitle sebelumnya. Ingin melanjutkan draf tersebut?");
+
+         if (confirmRecover) {
+            try {
+               const parsed = JSON.parse(savedData);
+               subtitles = parsed.subtitles;
+               proceedWithVideo(file, true);
+               return;
+            } catch (error) {
+               alert("Gagal memuat draf. Memulai proyek baru.");
+               localStorage.removeItem('raasub_project_cache');
+               subtitles = [];
+            }
+         } else {
+            localStorage.removeItem('raasub_project_cache');
+            subtitles = [];
+         }
+      }
+
+      proceedWithVideo(file, false);
+   };
 
    // === STEP 2: GEMINI API CALL ===
    document.getElementById('btn-start-ai').onclick = async () => {
@@ -691,7 +675,7 @@ IMPORTANT: Return ONLY the translated string. No quotes, no explanations, no JSO
          // Versi aman tanpa spesifik font (menghindari error font missing)
          await ffmpeg.run(
             '-i', 'input.mp4',
-            '-vf', "subtitles=subs.srt:force_style='Fontsize=16,PrimaryColour=&H00FFFFFF,Outline=1,Shadow=1'",
+            '-vf', "subtitles=subs.srt:force_style='Fontsize=24,PrimaryColour=&H00FFFFFF,Outline=1,Shadow=1,Alignment=2,MarginV=30'",
             '-preset', preset,
             '-c:a', 'copy', // Salin audio asli tanpa re-encode (biar cepat)
             'output.mp4'
