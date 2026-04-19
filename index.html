@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>RaaSub - AI Subtitle Workstation</title>
+   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+   <script src="coi-serviceworker.js"></script>
+
+   <link rel="stylesheet" href="https://cdn.hugeicons.com/font/hgi-stroke-rounded.css" />
+   <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+   <nav class="navbar">
+      <div class="logo">
+         <div class="logo-icon"><i class="hgi hgi-stroke hgi-rounded hgi-chat-01"></i></div>
+         <h1>RaaSub</h1>
+      </div>
+      <div class="nav-actions">
+         <button id="btn-api-key" class="btn-outline status-red">
+            <i class="hgi hgi-stroke hgi-rounded hgi-key-01"></i> <span>API Key</span>
+         </button>
+         <button id="btn-export" class="btn-primary hidden">
+            <i class="hgi hgi-stroke hgi-rounded hgi-download-square-02"></i> Export .SRT
+         </button>
+         <button id="btn-open-export-modal" class="btn-primary hidden">
+            <i class="hgi hgi-stroke hgi-rounded hgi-video-01"></i> Export Video (Hardsub)
+         </button>
+      </div>
+   </nav>
+
+   <main class="container">
+
+      <section id="screen-upload" class="screen active">
+         <div id="drop-zone" class="drop-zone">
+            <input type="file" id="video-input" accept="video/mp4,video/webm,video/ogg">
+            <i class="hgi hgi-stroke hgi-rounded hgi-inbox-upload"></i>
+            <h2>Klik atau Geser Video ke Sini</h2>
+            <p>Maksimal durasi 30 menit untuk hasil optimal dengan Gemini AI.</p>
+         </div>
+      </section>
+
+      <section id="screen-loading" class="screen">
+         <div class="spinner"></div>
+         <h2 id="loading-text" style="text-align: center;">Memproses transkripsi subtitle...</h2>
+         <p style="text-align: center;">Mohon tunggu, AI sedang menganalisis video dan mentranskrip subtitle.</p>
+      </section>
+
+      <section id="screen-success" class="screen text-center">
+         <i class="hgi hgi-stroke hgi-rounded hgi-password-validation"></i>
+         <h2>Transkripsi Berhasil!</h2>
+         <button id="btn-enter-editor" class="btn-primary btn-large mt-2">Masuk ke Editor</button>
+      </section>
+
+      <section id="screen-workspace" class="screen workspace">
+         <div class="workspace-top">
+            <div class="player-container">
+               <video id="video-player" controls></video>
+               <div id="subtitle-overlay" class="subtitle-overlay"></div>
+            </div>
+
+            <div class="editor-container">
+               <div class="editor-header">
+                  <div class="header-main">
+                     <h3>Daftar Subtitle</h3>
+                     <span id="sub-count" class="badge">0 Baris</span>
+                  </div>
+
+                  <div class="header-actions">
+                     <div id="save-indicator" class="save-indicator-inline">
+                        <i class="hgi hgi-stroke hgi-rounded hgi-tick-01"></i> Tersimpan
+                     </div>
+
+                     <button id="btn-toggle-scroll" class="btn-toggle active" title="Toggle Auto-Scroll">
+                        <i class="hgi hgi-stroke hgi-rounded hgi-magnet"></i>
+                     </button>
+
+                     <button id="btn-reset" class="btn-reset-minimal" title="Reset Proyek">
+                        <i class="hgi hgi-stroke hgi-rounded hgi-delete-02"></i> Reset
+                     </button>
+                  </div>
+
+               </div>
+
+               <div id="subtitle-list" class="subtitle-list">
+               </div>
+            </div>
+
+         </div>
+
+         <div class="timeline-container">
+            <div class="timeline-header">
+               <i class="hgi hgi-stroke hgi-rounded hgi-audio-wave-02"></i> Timeline Track
+            </div>
+            <div id="timeline-track" class="timeline-track">
+               <div id="timeline-ruler" class="timeline-ruler"></div>
+               <div id="timeline-blocks" class="timeline-blocks"></div>
+               <div id="playhead" class="playhead"></div>
+            </div>
+         </div>
+      </section>
+   </main>
+
+   <div id="modal-tutorial" class="modal-overlay">
+      <div class="modal-content">
+         <h2>Selamat Datang di RaaSub! 👋</h2>
+         <p>Alat cerdas ini menggunakan <strong>Google Gemini API</strong> untuk mentranskrip dan menerjemahkan video kamu secara akurat.</p>
+         <ul class="tutorial-list">
+            <li>🔑 <strong>Aman & Rahasia:</strong> API Key disimpan di komputermu sendiri (Local Storage).</li>
+            <li>⏱️ <strong>Batas Durasi:</strong> Disarankan video ≤ 30 menit agar AI bekerja maksimal dan cepat.</li>
+            <li>🎬 <strong>Visual Context:</strong> Gemini "melihat" video untuk hasil transkrip yang lebih relevan.</li>
+         </ul>
+         <button id="btn-close-tutorial" class="btn-primary w-full mt-2">Saya Mengerti, Mulai!</button>
+      </div>
+   </div>
+
+   <div id="modal-api" class="modal-overlay hidden">
+      <div class="modal-content">
+         <h2>Pengaturan API Key</h2>
+         <p class="text-sm text-muted">Dapatkan API Key gratis dari Google AI Studio.</p>
+         <input type="password" id="input-api-key" placeholder="Masukkan Gemini API Key (AIzaSy...)" class="input-field mt-2">
+         <div class="modal-actions mt-2">
+            <button id="btn-save-api" class="btn-primary">Simpan</button>
+            <button id="btn-close-api" class="btn-outline">Batal</button>
+         </div>
+      </div>
+   </div>
+
+   <div id="modal-settings" class="modal-overlay hidden">
+      <div class="modal-content modal-lg">
+         <h2>Pengaturan Transkrip</h2>
+
+         <div class="form-group mt-2">
+            <label class="checkbox-label">
+               <input type="checkbox" id="chk-translate"> Terjemahkan Subtitle
+            </label>
+            <select id="sel-language" class="input-field hidden mt-1">
+               <option value="English">Inggris (English)</option>
+               <option value="Indonesian" selected>Indonesia (Indonesian)</option>
+               <option value="Japanese">Jepang (Japanese)</option>
+               <option value="Korean">Korea (Korean)</option>
+               <option value="Chinese">China (Mandarin)</option>
+               <option value="Arabic">Arab (Arabic)</option>
+            </select>
+         </div>
+
+         <div class="form-group mt-2">
+            <label>Nuansa Bahasa</label>
+            <select id="sel-tone" class="input-field">
+               <option value="Formal and professional">Formal & Baku</option>
+               <option value="Casual, natural, and conversational">Santai & Kasual</option>
+               <option value="Short and concise for social media">Singkat (Cocok untuk Reels/TikTok)</option>
+            </select>
+         </div>
+
+         <div class="form-group mt-2">
+            <label class="checkbox-label">
+               <input type="checkbox" id="chk-autosplit" checked> Auto-Split (Pecah kalimat panjang)
+            </label>
+         </div>
+         <div class="form-group mt-1">
+            <label class="checkbox-label">
+               <input type="checkbox" id="chk-soundevent"> Sound Event Detection (Tawa, Musik, dll)
+            </label>
+         </div>
+
+         <div class="modal-actions mt-3">
+            <button id="btn-start-ai" class="btn-primary w-full">🚀 Mulai Transkrip</button>
+         </div>
+      </div>
+   </div>
+
+   <div id="modal-export-video" class="modal-overlay hidden">
+      <div class="modal-content export-modal">
+         <div id="export-header">
+            <h2 id="export-title">Export Video (Hardsub)</h2>
+            <p id="export-subtitle">Tanam subtitle langsung ke dalam file video.</p>
+         </div>
+
+         <div id="export-state-settings">
+            <div class="settings-group">
+               <label>Kualitas Render</label>
+               <select id="export-preset">
+                  <option value="ultrafast">Cepat (Ukuran Besar)</option>
+                  <option value="medium" selected>Standar (Direkomendasikan)</option>
+                  <option value="veryslow">Optimal (Ukuran Kecil, Lama)</option>
+               </select>
+            </div>
+            <div class="settings-group">
+               <label>Gaya Subtitle</label>
+               <p class="info-text">Default: Roboto, Putih dengan Bayangan Hitam.</p>
+            </div>
+            <div class="modal-actions">
+               <button id="btn-cancel-export" class="btn-outline">Batal</button>
+               <button id="btn-start-render" class="btn-primary">Mulai Render</button>
+            </div>
+         </div>
+
+         <div id="export-state-process" class="hidden">
+            <div class="loader-container">
+               <div class="spinner"></div>
+               <div id="render-progress">0%</div>
+            </div>
+            <div class="log-container">
+               <div id="export-log" class="export-log">
+               </div>
+            </div>
+            <p class="warning-text">Jangan tutup tab ini selama proses berlangsung.</p>
+         </div>
+
+         <div id="export-state-finished" class="hidden">
+            <div class="success-icon">🎉</div>
+            <h3>Render Selesai!</h3>
+            <div class="modal-actions-vertical">
+               <button id="btn-download-video" class="btn-primary">
+                  <i class="hgi hgi-stroke hgi-download-02"></i> Unduh Video (.mp4)
+               </button>
+               <button id="btn-cancel-export" class="btn-outline">Kembali ke Editor</button>
+               <button id="btn-export-reset" class="btn-link">Mulai Proyek Baru</button>
+            </div>
+         </div>
+      </div>
+   </div>
+
+   <script src="main.js"></script>
+</body>
+
+</html>
